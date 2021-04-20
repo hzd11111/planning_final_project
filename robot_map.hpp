@@ -45,6 +45,7 @@ struct MapElement {
 
 template<int Range>
 class LidarSensor {
+public:
     const double ANGLE_DISC = 1.0/Range;
     inline bool updateMap(std::vector<std::vector< MapElement> >& robot_map,
                    const Position& pos) const {
@@ -63,7 +64,7 @@ class LidarSensor {
         // expand the sensors
         bool map_changed = false;
         double current_ray_angle = 0.0;
-        while (current_ray_angle <= M_PI) {
+        while (current_ray_angle <= 2 *M_PI) {
             for (double range = 0.0; range <= Range; range += 0.5) {
                 int delta_row = range * cos(current_ray_angle);
                 int delta_col = range * sin(current_ray_angle);
@@ -102,10 +103,10 @@ struct FrontierGroup {
     void addFrontier(const Position& pos) {
         frontiers.push_back(pos);
         int new_x = pos.x, new_y = pos.y;
-        smallest_x = (new_x < smallest_x) ? new_x : smallest_x;
-        largest_x = (new_x > largest_x) ? new_x : largest_x;
-        smallest_y = (new_y < smallest_y) ? new_y : smallest_y;
-        largest_y = (new_y > largest_y) ? new_y : largest_y;
+        smallest_x = (new_x < smallest_x || smallest_x < 0) ? new_x : smallest_x;
+        largest_x = (new_x > largest_x || largest_x < 0) ? new_x : largest_x;
+        smallest_y = (new_y < smallest_y || smallest_y < 0) ? new_y : smallest_y;
+        largest_y = (new_y > largest_y || largest_y < 0) ? new_y : largest_y;
         updateGroupSize();
     }
 };
@@ -127,7 +128,7 @@ private:
                     current_map.emplace_back();
                     while (getline(token_stream, token, ',')) {
                         double element_value = std::stod(token);
-                        current_map.back().emplace_back(element_value>0.5, false);
+                        current_map.back().emplace_back(element_value>2.0, false);
                     }
                 }
             }
@@ -173,13 +174,16 @@ public:
 
     inline bool inMapRange(const Position& pos) const {
         size_t num_rows = current_map.size();
+        //std::cout<<"Num Rows: "<<num_rows<<std::endl;
         if (pos.getRow() >= num_rows || pos.getRow() < 0) {
             return false;
         }
         size_t num_cols = current_map[0].size();
+        //std::cout<<"Num Col: "<<num_cols<<std::endl;
         if (pos.getCol() >= num_cols || pos.getCol() < 0) {
             return false;
         }
+        //std::cout<<"True"<<std::endl;
 
         return true;
     }
@@ -195,7 +199,21 @@ public:
     }
 
     inline std::vector<Position> getNeighbours(const Position& pos) const {
-        static constexpr int NEIGHBOUR_DELTA[8][2] = {{-1, -1}, {-1, 0}, {-1, 1}, {0, -1}, {0, 1}, {1, -1}, {1, 0}, {1, 1}};
+        static constexpr int NEIGHBOUR_DELTA[24][2] = {{-1, -1}, {-1, 0}, {-1, 1}, {0, -1}, {0, 1}, {1, -1}, {1, 0}, {1, 1}};
+        std::vector<Position> neighbours;
+        for (const auto& delta : NEIGHBOUR_DELTA) {
+            Position new_neighbour(pos.x + delta[0], pos.y + delta[1]);
+            if (inMapRange(new_neighbour)) {
+                neighbours.push_back(std::move(new_neighbour));
+            }
+        }
+        return neighbours;
+    }
+
+    inline std::vector<Position> getAdjacentCells(const Position& pos) const {
+        static constexpr int NEIGHBOUR_DELTA[24][2] = {{-1, -1}, {-1, 0}, {-1, 1}, {0, -1}, {0, 1}, {1, -1}, {1, 0}, {1, 1},
+            {-2,-2}, {-2,-1}, {-2, 0}, {-2, 1}, {-2, 2}, {-1, -2}, {-1, 2}, {0, -2}, {0, 2} ,{1, -2} ,{1, 2} ,
+            {2, -2}, {2, -1} ,{2, 0} ,{2, 1} ,{2, 2}};
         std::vector<Position> neighbours;
         for (const auto& delta : NEIGHBOUR_DELTA) {
             Position new_neighbour(pos.x + delta[0], pos.y + delta[1]);
@@ -219,17 +237,20 @@ public:
     }
 
     bool isFrontier(int row, int col) const {
-        isFrontier(Position::fromRowCol(row,col));
+        return isFrontier(Position::fromRowCol(row,col));
     }
 
     std::optional<Position> findFrontier(bool** frontiers_to_exclude,
                                          size_t& prev_row, size_t& prev_col) const {
-        for (size_t i = prev_row; i < current_map.size(); ++i) {
+        for (int i = prev_row; i < current_map.size(); ++i) {
             size_t j = (i == prev_row) ? prev_col : 0;
+            
             for (; j < current_map[i].size(); ++j) {
                 prev_row = i;
                 prev_col = j;
-                if (frontiers_to_exclude[i][j]) continue;
+                if (frontiers_to_exclude[i][j]) {
+                    continue;
+                }
 
                 Position cur_pos = Position::fromRowCol(i, j);
                 if (isFrontier(cur_pos)) {
@@ -241,13 +262,25 @@ public:
     }
 
     std::vector<Position> findAllConnectingFrontiers(bool** frontiers_to_exclude,
-                                    const Position& pos) {
+                                    const Position& pos) const {
         std::vector<Position> frontiers;
         int row = pos.getRow(), col = pos.getCol();
         if (frontiers_to_exclude[row][col]) return frontiers;
         if (!isFrontier(row, col)) return frontiers;
         frontiers_to_exclude[row][col] = true;
-        auto neighbours = getNeighbours(pos);
+        frontiers.push_back(pos);
+        auto neighbours = getAdjacentCells(pos);
+        decltype(neighbours) more_neighbours;
+
+        /*for (int i = 0; i < 1; i++) {
+            more_neighbours = decltype(neighbours)();
+            for (const auto& n : neighbours) {
+                auto neighbours_of_neighbours = getAdjacentCells(n);
+                more_neighbours.insert(more_neighbours.end(), neighbours_of_neighbours.begin(), neighbours_of_neighbours.end());
+            }
+            neighbours = std::move(more_neighbours);
+        }*/
+
         for (const auto& n : neighbours) {
             auto new_frontiers = findAllConnectingFrontiers(frontiers_to_exclude, n);
             frontiers.insert(frontiers.end(), new_frontiers.begin(), new_frontiers.end());
@@ -256,7 +289,13 @@ public:
     }
 
     std::vector<FrontierGroup> getAllFrontierGroups() const {
-        bool frontiers_explored[current_map.size()][current_map[0].size()] = {false};
+        int num_row = current_map.size();
+        int num_col = current_map[0].size();
+        bool** frontiers_explored = new bool *[num_row];
+        for (int i = 0; i < num_row; ++i) {
+            frontiers_explored[i] = new bool[num_col]();
+            memset(frontiers_explored[i], false, num_col*sizeof(bool));
+        }
         size_t row = 0, col = 0;
         std::optional<Position> new_frontier = findFrontier(frontiers_explored, row, col);
         std::vector<FrontierGroup> result;
@@ -274,6 +313,10 @@ public:
 
             new_frontier = findFrontier(frontiers_explored, row, col);
         }
+        for (int i = 0; i < num_row; ++i) {
+            delete[] frontiers_explored[i];
+        }
+        delete[] frontiers_explored;
         return result;
     }
 
