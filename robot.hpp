@@ -41,16 +41,18 @@ struct PlannerMap {
 struct Node {
     int index;
     Position pos = Position(-1,-1);
-    float dist; 
+    int g;
+    int h = 0; 
     Position parent_pos = Position(-1,-1);
     int parent_node_int;
     std::vector<Position> neighbours;
 
     // Constructor 
-    Node(int index, Position pos, float dist, Position parent_pos) {
-        this->index = index; this->pos = pos; this->dist=dist; 
+    Node(int index, Position pos, float g, Position parent_pos) {
+        this->index = index; this->pos = pos; this->g=g; 
         this->parent_pos = parent_pos;
     }
+    Node(){}
 
     bool operator==(const Node& other)
     {
@@ -62,7 +64,7 @@ struct Node {
 struct NodeComparator	{   
     bool operator()(Node const& a, Node const& b) const
     {
-        return a.dist > b.dist;
+        return (a.g + a.h) > (b.g + b.h);
     }
 };
 
@@ -77,7 +79,10 @@ class Robot {
         vector<Position> traj_history;
         deque<Position> planned_traj; //ALVIN, why deque vs a vector?
         // vector<Position> assigned_frontiers;
-        vector<FrontierGroup> assigned_frontier_groups;
+        // vector<FrontierGroup> assigned_frontier_groups;
+        FrontierGroup assigned_frontier_group;
+        unordered_map<Position, Position, PositionHash> frontiers_map;
+        unordered_map<Position, int, PositionHash> frontiers_weights_map; 
         // vector<Position> remaining_assigned_frontiers;
         // Position robot_position; //same as last elem of traj_hist
 
@@ -92,44 +97,23 @@ class Robot {
             this->id = id;
             this->traj_history.push_back(start_position);
         }
-        
-        void resetFrontierGroups() { 
-            // resets the frontiers and the plannet traj
-            this->assigned_frontier_groups = vector<FrontierGroup>();
-        }
 
         void assignFrontierGroup(FrontierGroup frontier_group) {
-            this->assigned_frontier_groups.push_back(frontier_group);
+            // this->assigned_frontier_groups.push_back(frontier_group);
+            this->assigned_frontier_group = frontier_group;
+            
+            int index = 0;
+            for (Position frontier : assigned_frontier_group.frontiers) {
+                frontiers_map.insert({frontier,frontier});
+                frontiers_weights_map.insert({frontier, frontier_group.frontier_weights[index]});
+                index++;
+            }
         }
        
         bool isTraversable(const Position& pos, const PlannerMap& planner_map) {
             // traversable positions are explored, obstacle free and in the map range
             RobotMap<LidarSensor<LIDAR_RANGE>>& robot_map = planner_map.robot_map;
             return robot_map.isExplored(pos) && !(robot_map.isObstacle(pos)) && robot_map.inMapRange(pos);
-        }
-
-        pair<Position, int> getClosestFrontier(Position pos) { 
-            // assumes 8-connected grid, returns distance in float and parent frontier group index
-            // calculate the Euclidean distance to the nearest frontier of all the frontier groups
-
-            pair<Position, int> closest_frontier = make_pair(pos, -1); // pair<distance, parent group index>
-            int parent_frontier_ind = 0;
-            double closest_frontier_distance = __DBL_MAX__;
-
-            for (auto frontier_group : assigned_frontier_groups) {
-                for (auto frontier : frontier_group.frontiers) {
-                    
-                    double distance = calcDistance(frontier, pos);
-                    
-                    if (distance < closest_frontier_distance) {
-                        closest_frontier = make_pair(frontier, parent_frontier_ind);
-                        closest_frontier_distance = distance;
-                    }
-                }
-                parent_frontier_ind++;
-            }
-            
-            return closest_frontier;
         }
 
         void planToClosestFrontier(PlannerMap& planner_map) {
@@ -142,9 +126,7 @@ class Robot {
             Node start_node = Node(-1, start_position, 0, start_position); // parent pos same as node pos
 
             // find the closest frontier out of all frontier groups and create goal node with it
-            pair<Position, int> closest_frontier = getClosestFrontier(start_position);
-            double goal_distance = calcDistance(closest_frontier.first, start_position);
-            Node goal_node = Node(1, closest_frontier.first, goal_distance, closest_frontier.first);
+            Node goal_node = Node();
 
             // initialize A*
             std::priority_queue<Node, vector<Node>, NodeComparator> open_list; 
@@ -161,7 +143,7 @@ class Robot {
                 open_list.pop();
                 
                 // check for goal
-                if (curr_node == goal_node) {goal_found = true; goal_node = curr_node; break;}
+                if (frontiers_map.find(curr_node.pos) != frontiers_map.end()) {goal_found = true; goal_node = curr_node; break;}
 
                 // check if node is already visited
                 bool node_not_yet_expanded = (visited.find(curr_node) == visited.end());
@@ -176,14 +158,18 @@ class Robot {
                     // loop over all the neighbors
                     while(!neighbours_positions.empty())
                     {
+                        Position neighbour_pos = neighbours_positions.back();
                         // skip node if it isn't traversable 
-                        if (!isTraversable(neighbours_positions.back(), planner_map)) {
+                        if (!isTraversable(neighbour_pos, planner_map)) {
                             neighbours_positions.pop_back(); 
                             continue; 
                         }
 
-                        double distance = calcDistance(neighbours_positions.back(), start_position);
-                        Node neighbour = Node(0, neighbours_positions.back(), distance, curr_node.pos);
+                        int g_value = curr_node.g + 1;
+                        Node neighbour = Node(0, neighbour_pos, g_value, curr_node.pos);
+                        if (frontiers_map.find(neighbour_pos) != frontiers_map.end()) {
+                            neighbour.h = frontiers_weights_map[neighbour_pos];
+                        }
                         neighbours_positions.pop_back();
                         bool node_not_yet_expanded = (visited.find(neighbour) == visited.end());
                         
