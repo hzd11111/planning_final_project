@@ -49,7 +49,8 @@ struct Node {
 
     // Constructor 
     Node(int index, Position pos, float g, Position parent_pos) {
-        this->index = index; this->pos = pos; this->g=g; 
+        this->index = index; //this->pos = pos; 
+        this->g=g; 
         this->parent_pos = parent_pos;
     }
     Node(){}
@@ -77,14 +78,11 @@ struct NodeHasher {
 class Robot {
     private:
         vector<Position> traj_history;
-        deque<Position> planned_traj; //ALVIN, why deque vs a vector?
-        // vector<Position> assigned_frontiers;
-        // vector<FrontierGroup> assigned_frontier_groups;
+        deque<Position> planned_traj; 
+
         FrontierGroup assigned_frontier_group;
         unordered_map<Position, Position, PositionHash> frontiers_map;
         unordered_map<Position, int, PositionHash> frontiers_weights_map; 
-        // vector<Position> remaining_assigned_frontiers;
-        // Position robot_position; //same as last elem of traj_hist
 
         double calcDistance(Position a, Position b) {
             return sqrt(pow((a.x - b.x), 2) + pow((a.y - b.y), 2));

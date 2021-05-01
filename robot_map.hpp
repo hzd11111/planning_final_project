@@ -25,6 +25,11 @@ struct Position {
     std::string toString() const {
         return std::to_string(x) + "," + std::to_string(y);
     }
+    
+    bool operator==(const Position& other)
+    {
+        return (other.x == this->x) && (other.y == this->y);
+    }
 };
 
 struct PositionHash {
@@ -86,6 +91,7 @@ public:
 
 struct FrontierGroup {
     std::vector<Position> frontiers;
+    std::vector<int> frontier_weights;
     int group_size;
     int smallest_x;
     int smallest_y;
@@ -294,7 +300,7 @@ public:
         bool** frontiers_explored = new bool *[num_row];
         for (int i = 0; i < num_row; ++i) {
             frontiers_explored[i] = new bool[num_col]();
-            memset(frontiers_explored[i], false, num_col*sizeof(bool));
+            this->memset(frontiers_explored[i], false, num_col*sizeof(bool));
         }
         size_t row = 0, col = 0;
         std::optional<Position> new_frontier = findFrontier(frontiers_explored, row, col);
