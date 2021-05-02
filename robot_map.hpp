@@ -6,6 +6,7 @@
 #include <sstream>
 #include <fstream>
 #include <math.h>
+#include <set>
 #include <optional>
 #include <unordered_map>
 #include <unordered_set>
@@ -196,6 +197,8 @@ public:
     Sensor sensor;
     int max_frontier_group_size = 0;
     std::vector<Position> robot_poses;
+    std::vector<std::vector<std::set<int>>> robot_occupancy_map;
+    int timestep;
 
     RobotMap(std::string filename) {
         readFromFile(filename);
