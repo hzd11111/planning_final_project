@@ -1,11 +1,15 @@
 #include <vector>
 #include <string>
+#include <climits>
 #include <iostream>
 #include <sstream>
 #include <fstream>
 #include <math.h>
 #include <optional>
-
+#include <unordered_map>
+#include <unordered_set>
+#define GETMAPINDEX(X, Y, XSIZE, YSIZE) ((Y-1)*XSIZE + (X-1))
+#define INFLATION_RADIUS 3
 struct Position {
     int x, y;
     Position(int x_, int y_) :
@@ -20,6 +24,10 @@ struct Position {
 
     int getCol() const {
         return x;
+    }
+
+    int getPositionIndex() {
+        return (y)*10000 + (x);
     }
 
     std::string toString() const {
@@ -86,6 +94,9 @@ public:
 
 struct FrontierGroup {
     std::vector<Position> frontiers;
+    std::vector<int> frontier_cost;
+    std::unordered_map<int, int> position_to_id;
+
     int group_size;
     int smallest_x;
     int smallest_y;
@@ -100,8 +111,19 @@ struct FrontierGroup {
         group_size = (y_diff > x_diff) ? y_diff : x_diff;
     }
 
-    void addFrontier(const Position& pos) {
+    // void addFrontier(const Position& pos) {
+    //     frontiers.push_back(pos);
+    //     int new_x = pos.x, new_y = pos.y;
+    //     smallest_x = (new_x < smallest_x || smallest_x < 0) ? new_x : smallest_x;
+    //     largest_x = (new_x > largest_x || largest_x < 0) ? new_x : largest_x;
+    //     smallest_y = (new_y < smallest_y || smallest_y < 0) ? new_y : smallest_y;
+    //     largest_y = (new_y > largest_y || largest_y < 0) ? new_y : largest_y;
+    //     updateGroupSize();
+    // }
+    void addFrontier(const Position& pos, const int score) {
         frontiers.push_back(pos);
+        frontier_cost.push_back(score);
+
         int new_x = pos.x, new_y = pos.y;
         smallest_x = (new_x < smallest_x || smallest_x < 0) ? new_x : smallest_x;
         largest_x = (new_x > largest_x || largest_x < 0) ? new_x : largest_x;
@@ -109,6 +131,31 @@ struct FrontierGroup {
         largest_y = (new_y > largest_y || largest_y < 0) ? new_y : largest_y;
         updateGroupSize();
     }
+
+    void mapPositiontoIndex() {
+
+        for(int i=0; i<frontiers.size(); i++ ) {
+            position_to_id[frontiers[i].getPositionIndex()] = i;
+        }
+
+    }
+    void inflateCost(const Position& pos) {
+        if (position_to_id.size() == 0) {
+            mapPositiontoIndex();
+        }
+
+        for(int i=0; i< INFLATION_RADIUS; i++ ) {
+            for(int j=0; i< INFLATION_RADIUS; i++ ) {
+                int id = (pos.x + i)*10000 + (pos.y + j);
+                if(position_to_id.find(id) != position_to_id.end()) {
+                    frontier_cost[position_to_id[id]] += INFLATION_RADIUS - std::max(i,j);
+                }
+                
+            }
+        }
+
+    }
+
 };
 
 template<typename Sensor>
@@ -141,11 +188,14 @@ private:
 public:
     std::vector<std::vector< MapElement> > current_map;
     Sensor sensor;
+    int max_frontier_group_size = 0;
+    std::vector<Position> robot_poses;
 
     RobotMap(std::string filename) {
         readFromFile(filename);
     }
 
+    //Sachit: Can just be replaced by number of unexplored 
     std::string convertToString() const {
         std::string result = "";
         bool first_row = true;
@@ -261,14 +311,16 @@ public:
         return std::nullopt;
     }
 
-    std::vector<Position> findAllConnectingFrontiers(bool** frontiers_to_exclude,
+    std::pair<std::vector<Position>, std::vector<int>> findAllConnectingFrontiers(bool** frontiers_to_exclude,
                                     const Position& pos) const {
-        std::vector<Position> frontiers;
+        std::pair<std::vector<Position>, std::vector<int>> frontiers;
         int row = pos.getRow(), col = pos.getCol();
         if (frontiers_to_exclude[row][col]) return frontiers;
         if (!isFrontier(row, col)) return frontiers;
         frontiers_to_exclude[row][col] = true;
-        frontiers.push_back(pos);
+        frontiers.first.push_back(pos);
+        frontiers.second.push_back(-1);
+        int index_curr_neigh = frontiers.second.size()-1;
         auto neighbours = getAdjacentCells(pos);
         decltype(neighbours) more_neighbours;
 
@@ -281,14 +333,21 @@ public:
             neighbours = std::move(more_neighbours);
         }*/
 
+        int score = 0;
         for (const auto& n : neighbours) {
             auto new_frontiers = findAllConnectingFrontiers(frontiers_to_exclude, n);
-            frontiers.insert(frontiers.end(), new_frontiers.begin(), new_frontiers.end());
+            if(!isFrontier(n.getRow(), n.getCol()) ) {
+                score++;
+            }
+            frontiers.first.insert(frontiers.first.end(), new_frontiers.first.begin(), new_frontiers.first.end());
+            frontiers.second.insert(frontiers.second.end(), new_frontiers.second.begin(), new_frontiers.second.end());
         }
+        frontiers.second[index_curr_neigh] = score;
+
         return frontiers;
     }
 
-    std::vector<FrontierGroup> getAllFrontierGroups() const {
+    std::vector<FrontierGroup> getAllFrontierGroups() {
         int num_row = current_map.size();
         int num_col = current_map[0].size();
         bool** frontiers_explored = new bool *[num_row];
@@ -305,10 +364,30 @@ public:
 
             // make frontier group
             FrontierGroup new_group;
-            for (const auto& frontier : list_of_frontiers) {
-                new_group.addFrontier(frontier);
-            }
+            int index = 0;
+            for (int i=0; i<list_of_frontiers.second.size()-1; i++) {
+                    if(list_of_frontiers.second[0] == 1 && i < 2) {
+                        if(i != 0 && i <list_of_frontiers.second.size()-2 ) {
+                            list_of_frontiers.second[i]++;        
+                        }
+                        continue;
+                    }
+                    
+                    if(list_of_frontiers.second[i] == 1) {
+                        continue;
+                    }
+                    else if(i+1<list_of_frontiers.second.size() &&list_of_frontiers.second[i+1] == 1) {
+                        list_of_frontiers.second[i]++; 
+                        continue;
+                    }
 
+                    list_of_frontiers.second[i]++;
+
+            }
+            for (const auto& frontier : list_of_frontiers.first) {
+                new_group.addFrontier(frontier, std::max(4 - list_of_frontiers.second[index++] + 1, 1));
+            }
+            max_frontier_group_size = std::max(max_frontier_group_size, new_group.group_size );
             result.push_back(std::move(new_group));
 
             new_frontier = findFrontier(frontiers_explored, row, col);
@@ -321,3 +400,85 @@ public:
     }
 
 };
+
+// typedef std::vector<std::vector<int>> weight_map;
+
+class CentralPlanner {
+    
+    int num_robots;
+    double alpha;
+    double beta;
+    double gamma;
+    double lamda = 0; //For a future probabilistic model
+    //per robot Heuristic
+    // std::vector<weight_map> g_map;
+    
+    CentralPlanner(double alpha, double beta, double gamma) {
+
+    }
+    /* Distance of robot to each FG (based on closest Frontier) */
+    std::unordered_map<int, std::vector<std::pair<int, int>>> frontier_group_distance;
+
+    int getRobotFrontierDistance(Position robot_loc, Position frontier_loc) {
+        return std::max( std::abs(robot_loc.x - frontier_loc.x), std::abs(robot_loc.y - frontier_loc.y)  ); 
+    }
+
+    void getRobotFrontierGroupDistance(std::vector<FrontierGroup>& frontier_groups, std::vector<Position>& robot_positions ) {
+        
+        for(int i=0 ; i< num_robots; i++) {  
+            for(int j = 0; j< 1000 ; j++ )  { // Number Groups
+                std::pair<int, int> temp_id_dist = {0,INT_MAX}; 
+                for(int k =0 ; k< 1000; k++){ // Number Frontier in Group
+                    int distance_to_robot = getRobotFrontierDistance(robot_positions[i], frontier_groups[j].frontiers[k]);
+                    if(temp_id_dist.second > distance_to_robot) {
+                        temp_id_dist.first = j;
+                        temp_id_dist.second = distance_to_robot;
+                    }
+                }
+                frontier_group_distance[i].push_back(temp_id_dist);      
+            }
+            
+        }
+
+    }
+
+    std::unordered_map<int, int> assignFrontierGroup(std::vector<FrontierGroup>& frontier_groups, std::vector<Position>& robot_positions, int max_frontier_group_size) {
+        getRobotFrontierGroupDistance(frontier_groups, robot_positions);
+        std::unordered_map<int, int> robot_frontier_group;
+        std::unordered_map<int, int> num_robots_assigned_to_frontier;
+        for(int i=0 ; i< num_robots; i++) {
+            double score = INT_MAX; 
+            int chosen_frontier_group_id = 0;
+            for(int j = 0; j< 1000 ; j++ ) { //Frontier Groups
+                // alpha * COST + beta * (IMPORTANCE) + gamme * (CURIOSITY) + lamda*REPETITION [last is zero]
+                double frontier_group_score = alpha * (frontier_group_distance[i][j].second) + beta * (frontier_groups[j].group_size/max_frontier_group_size) + gamma * (num_robots_assigned_to_frontier[j]);
+                if (score > frontier_group_score) {
+                    chosen_frontier_group_id = j;
+                }
+            }
+            robot_frontier_group[i] = chosen_frontier_group_id;
+            num_robots_assigned_to_frontier[chosen_frontier_group_id]++;
+
+        }
+
+    }    
+};
+
+//TESTS 
+//1,2,3
+// 3 Our, Greedy, ours+switch
+
+//MAP update -> Frontiere Update
+/* After robot runs lets keep same frontier group and just do a isfrontier check and then Update when 
+    -> all n robots reach froniter
+    -> No member left in frontier group
+
+Better way
+If map is updated at each timestep
+Map frontier from list to fronier group and then keep on culling all visible sections [Too time complex]
+
+//FUTURE EXPANSION
+ -> Incremental search (LEC8)
+ -> Non Real Time ARA to use other robots searches
+ -> If num robots > 2 do backward then forward [Do Time Comparision]
+*/
