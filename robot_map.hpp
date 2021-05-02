@@ -4,6 +4,7 @@
 #include <sstream>
 #include <fstream>
 #include <math.h>
+#include <set>
 #include <optional>
 
 struct Position {
@@ -147,6 +148,8 @@ private:
 public:
     std::vector<std::vector< MapElement> > current_map;
     Sensor sensor;
+    std::vector<std::vector<std::set<int>>> robot_occupancy_map;
+    int timestep;
 
     RobotMap(std::string filename) {
         readFromFile(filename);
