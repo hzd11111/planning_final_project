@@ -423,7 +423,12 @@ class CentralPlanner {
     //per robot Heuristic
     // std::vector<weight_map> g_map;
     
+    // 1, 10, 10
     CentralPlanner(double alpha, double beta, double gamma) {
+        this->alpha = alpha;
+        this->beta = beta;
+        this->gamma = gamma;
+
 
     }
     /* Distance of robot to each FG (based on closest Frontier) */
@@ -461,7 +466,7 @@ class CentralPlanner {
             int chosen_frontier_group_id = 0;
             for(int j = 0; j< 1000 ; j++ ) { //Frontier Groups
                 // alpha * COST + beta * (IMPORTANCE) + gamme * (CURIOSITY) + lamda*REPETITION [last is zero]
-                double frontier_group_score = alpha * (frontier_group_distance[i][j].second) + beta * (frontier_groups[j].group_size/max_frontier_group_size) + gamma * (num_robots_assigned_to_frontier[j]);
+                double frontier_group_score = alpha * (frontier_group_distance[i][j].second) - beta * (frontier_groups[j].group_size/max_frontier_group_size) + gamma * (num_robots_assigned_to_frontier[j]);
                 if (score > frontier_group_score) {
                     chosen_frontier_group_id = j;
                 }
