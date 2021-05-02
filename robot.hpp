@@ -199,11 +199,11 @@ class Robot {
 
         }
 
-        Position getPosition(int index) { 
+        Position getPosition(int index) const { 
             return traj_history[index];
         }
 
-        Position get_position() { 
+        Position get_position() const { 
             return traj_history.back();
         }
 
