@@ -34,6 +34,11 @@ struct Position {
     std::string toString() const {
         return std::to_string(x) + "," + std::to_string(y);
     }
+    
+    bool operator==(const Position& other)
+    {
+        return (other.x == this->x) && (other.y == this->y);
+    }
 };
 
 struct PositionHash {
@@ -95,7 +100,7 @@ public:
 
 struct FrontierGroup {
     std::vector<Position> frontiers;
-    std::vector<int> frontier_cost;
+    std::vector<int> frontier_weights;
     std::unordered_map<int, int> position_to_id;
 
     int group_size;
@@ -123,7 +128,7 @@ struct FrontierGroup {
     // }
     void addFrontier(const Position& pos, const int score) {
         frontiers.push_back(pos);
-        frontier_cost.push_back(score);
+        frontier_weights.push_back(score);
 
         int new_x = pos.x, new_y = pos.y;
         smallest_x = (new_x < smallest_x || smallest_x < 0) ? new_x : smallest_x;
@@ -149,7 +154,7 @@ struct FrontierGroup {
             for(int j=0; i< INFLATION_RADIUS; i++ ) {
                 int id = (pos.x + i)*10000 + (pos.y + j);
                 if(position_to_id.find(id) != position_to_id.end()) {
-                    frontier_cost[position_to_id[id]] += INFLATION_RADIUS - std::max(i,j);
+                    frontier_weights[position_to_id[id]] += INFLATION_RADIUS - std::max(i,j);
                 }
                 
             }
