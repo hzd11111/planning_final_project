@@ -140,7 +140,8 @@ struct FrontierGroup {
     }
 
     void mapPositiontoIndex() {
-
+        
+        position_to_id.clear();
         for(int i=0; i<frontiers.size(); i++ ) {
             position_to_id[frontiers[i].getPositionIndex()] = i;
         }
@@ -204,7 +205,7 @@ public:
         readFromFile(filename);
     }
 
-    //Sachit: Can just be replaced by number of unexplored 
+    //Sachit: Can just be replaced by number of explored 
     std::string convertToString() const {
         std::string result = "";
         bool first_row = true;
@@ -469,6 +470,8 @@ class CentralPlanner {
             num_robots_assigned_to_frontier[chosen_frontier_group_id]++;
 
         }
+
+        return robot_frontier_group;
 
     }    
 };

@@ -16,28 +16,28 @@
 using namespace std;
 
 // template<typename Sensor>
-struct PlannerMap {
+// struct PlannerMap {
 
-    vector<vector<set<int>>> robot_occupancy_map; //keys are timestamps
-    RobotMap<LidarSensor<LIDAR_RANGE>>& robot_map;
-    int timestamp;
+//     vector<vector<set<int>>> robot_occupancy_map; //keys are timestamps
+//     RobotMap<LidarSensor<LIDAR_RANGE>>& robot_map;
+//     int timestamp;
 
-    PlannerMap(RobotMap<LidarSensor<LIDAR_RANGE>>& robot_map_inc): robot_map(robot_map_inc) {
-        // this->robot_map = robot_map;
-        // initialize occupancy map
-        size_t num_rows = robot_map.current_map.size();
-        size_t num_cols = robot_map.current_map[0].size();
+//     PlannerMap(RobotMap<LidarSensor<LIDAR_RANGE>>& robot_map_inc): robot_map(robot_map_inc) {
+//         // this->robot_map = robot_map;
+//         // initialize occupancy map
+//         size_t num_rows = robot_map.current_map.size();
+//         size_t num_cols = robot_map.current_map[0].size();
 
-        this->robot_occupancy_map.resize(num_rows, vector<set<int>>(num_cols));
-        // TODO: where do we initialize the intial robot state
-        this->timestamp = 0;
-    }
+//         this->robot_occupancy_map.resize(num_rows, vector<set<int>>(num_cols));
+//         // TODO: where do we initialize the intial robot state
+//         this->timestamp = 0;
+//     }
 
-    int size(){
-        return robot_map.current_map.size() * robot_map.current_map[0].size();
-    }
+//     int size(){
+//         return robot_map.current_map.size() * robot_map.current_map[0].size();
+//     }
 
-};
+// };
 
 struct Node {
     int index;
@@ -152,8 +152,10 @@ class Robot {
                     // assigned_frontier_group.frontier_weights.erase(std::find(assigned_frontier_group.frontiers.begin(), assigned_frontier_group.frontiers.end(), curr_node.pos));
                     
                     // TODO: Delete weights from the 
-                    assigned_frontier_group.frontiers.erase(std::find(assigned_frontier_group.frontiers.begin(), assigned_frontier_group.frontiers.end(), curr_node.pos));
-                    // assigned_frontier_group.frontiers.erase(assigned_frontier_group.position_to_id[curr_node.pos.get_position_index()]);
+                    // assigned_frontier_group.frontiers.erase(std::find(assigned_frontier_group.frontiers.begin(), assigned_frontier_group.frontiers.end(), curr_node.pos));
+                    assigned_frontier_group.frontiers.erase(assigned_frontier_group.frontiers.begin() + assigned_frontier_group.position_to_id[curr_node.pos.getPositionIndex()]);
+                    assigned_frontier_group.frontier_weights.erase(assigned_frontier_group.frontier_weights.begin() + assigned_frontier_group.position_to_id[curr_node.pos.getPositionIndex()]);
+                    assigned_frontier_group.mapPositiontoIndex();
                     frontiers_map.erase(curr_node.pos);
                     break;
                 }
@@ -183,6 +185,10 @@ class Robot {
                         if (frontiers_map.find(neighbour_pos) != frontiers_map.end()) {
                             neighbour.h = frontiers_weights_map[neighbour_pos];
                         }
+                        else 
+                        {
+                            neighbour.h = 0;
+                        }
                         neighbours_positions.pop_back();
                         bool node_not_yet_expanded = (visited.find(neighbour) == visited.end());
                         
@@ -199,7 +205,7 @@ class Robot {
             if (goal_found) {
                 // reset the planned trajectory
                 planned_traj = deque<Position>();
-                // assigned_frontier_group.inflateCost(goal_node.pos); TODO: uncomment
+                assigned_frontier_group.inflateCost(goal_node.pos); 
 
                 auto curr_node = goal_node;
                 // backtrack till the start node, dont push start node to planned traj
