@@ -22,3 +22,16 @@ for i = 1:size(robot_path,1)
 end
 hold off;
 
+%% Output Sequentially
+timestamp = 1;
+foldername = "test_exp";
+robot_pos_file = "/robot_poses";
+map_file_name = "/map_vis_intermediate";
+figure("Name", "Hello", 'units','normalized','outerposition',[0 0 1 1]);
+while 1
+    if(displayPath(foldername+robot_pos_file+int2str(timestamp),foldername+map_file_name+int2str(timestamp)))
+        timestamp = timestamp + 10;
+    end
+    pause(0.001);
+end
+

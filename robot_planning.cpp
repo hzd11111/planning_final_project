@@ -92,7 +92,7 @@ int main(int argc, char* argv[]) {
         if (all_f_group.empty()) break;
 
         // assign the frontiers to the robots
-        std::cout<<"Assign the frontiers to the robots"<<std::endl;
+        std::cout<<"Assign the frontiers to the robots: "<<all_f_group.size()<<std::endl;
         vector<Position> robot_positions;
         for (const auto& robot : robot_list) {
             robot_positions.push_back(robot.get_position());
@@ -119,11 +119,13 @@ int main(int argc, char* argv[]) {
                 all_robots_reached &= path_executed[i];
             }
             robot_map.timestep++;
-            writeRobotPoses("robot_poses"+std::to_string(robot_map.timestep), robot_list);
-            std::ofstream output_file_intermediate;
-            output_file_intermediate.open("map_vis_intermediate"+std::to_string(robot_map.timestep));
-            output_file_intermediate << robot_map.convertToString(); 
-            output_file_intermediate.close();
+            if (robot_map.timestep % 10 == 1) {
+                writeRobotPoses(run_name+"/robot_poses"+std::to_string(robot_map.timestep), robot_list);
+                std::ofstream output_file_intermediate;
+                output_file_intermediate.open(run_name+"/map_vis_intermediate"+std::to_string(robot_map.timestep));
+                output_file_intermediate << robot_map.convertToString(); 
+                output_file_intermediate.close();
+            }
         }
 
 

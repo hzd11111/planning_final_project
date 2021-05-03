@@ -239,9 +239,9 @@ class Robot {
             }
 
             // back tracked path
-            for(const auto& pos : planned_traj) {
+            /*for(const auto& pos : planned_traj) {
                 std::cout<<pos.toString()<<std::endl;
-            }
+            }*/
         }
 
         Position getPosition(int index) const { 
@@ -256,42 +256,42 @@ class Robot {
             // take planned traj and keep updating traj_history till goal is found
             // return false if no frontier is reached
             
-            std::cout<<"Before: "<<planned_traj.size()<<std::endl;
+            //std::cout<<"Before: "<<planned_traj.size()<<std::endl;
             // check if planned_traj has steps remaining, otherwise replan if frontiers remaining
             if (planned_traj.size() == 0 && assigned_frontier_group.frontiers.size() == 0) {
                 traj_history.push_back(traj_history.back());
                 return true; // no steps left to execute
             }
             else if (planned_traj.size() == 0 && assigned_frontier_group.frontiers.size() > 0) {
-                std::cout<<"If statement correct"<<std::endl;
+                //std::cout<<"If statement correct"<<std::endl;
                 planToClosestFrontier(robot_map, assigned_frontier_group);
             }
-            std::cout<<"After: "<<planned_traj.size()<<std::endl;
+            //std::cout<<"After: "<<planned_traj.size()<<std::endl;
             
             // check if the step is collision free, otherwise skip moving for this timestep
-            std::cout<<"1"<<std::endl;
-            std::cout<<planned_traj[0].toString()<<std::endl;
+            //std::cout<<"1"<<std::endl;
+            //std::cout<<planned_traj[0].toString()<<std::endl;
             set<int> &occupancy_set = robot_map.robot_occupancy_map[planned_traj[0].getRow()][planned_traj[0].getCol()];
-            std::cout<<"1A"<<std::endl;
+            //std::cout<<"1A"<<std::endl;
             bool position_occupied = occupancy_set.find(robot_map.timestep + 1) != occupancy_set.end();
-            std::cout<<"1B"<<std::endl;
+            //std::cout<<"1B"<<std::endl;
             if (position_occupied) {
                 traj_history.push_back(traj_history.back());
                 return reached_any_frontier;
             }
-            std::cout<<"2"<<std::endl;
+            //std::cout<<"2"<<std::endl;
 
             // once planned traj has steps to execute and the position is obstacle free
-            std::cout<<"Length of Planned Path: "<<planned_traj.size()<<std::endl;
+            //std::cout<<"Length of Planned Path: "<<planned_traj.size()<<std::endl;
             traj_history.push_back(planned_traj[0]);
-            std::cout<<"Last Planned Path: "<<planned_traj[0].toString()<<std::endl;
+            //std::cout<<"Last Planned Path: "<<planned_traj[0].toString()<<std::endl;
             robot_map.updateExploration(planned_traj[0]);
-            std::cout<<"B"<<std::endl;
+            //std::cout<<"B"<<std::endl;
             occupancy_set.insert(robot_map.timestep + 1);
-            std::cout<<"C"<<std::endl;
+            //std::cout<<"C"<<std::endl;
             planned_traj.pop_front();
-            std::cout<<"D"<<std::endl;
-            std::cout<<"3"<<std::endl;
+            //std::cout<<"D"<<std::endl;
+            //std::cout<<"3"<<std::endl;
             if (planned_traj.size() == 0) {reached_any_frontier = true;}
             
             return reached_any_frontier;
