@@ -52,8 +52,18 @@ int main(int argc, char* argv[]) {
     for (int i = 0; i < robot_num; ++i) {
         std::cout<<"Initializing Robot "<<i<<std::endl;
         robot_list.emplace_back(std::to_string(i), starting_postions.at(i));
+        robot_map.updateExploration(starting_postions.at(i));
     }
     CentralPlanner central_planner(1,10,10, robot_num);
+
+    // initial map vis
+    std::ofstream output_file;
+    output_file.open("map_vis.txt");
+    std::cout<<"Writing to File "<<"map_vis.txt"<<std::endl;
+    output_file << robot_map.convertToString(); 
+    std::cout<<"File Writen"<<std::endl;
+    output_file.close();
+
 
     // main loop
     std::cout<<"Starting Main Loop"<<std::endl;
@@ -72,7 +82,12 @@ int main(int argc, char* argv[]) {
         for (const auto& robot : robot_list) {
             robot_positions.push_back(robot.get_position());
         }
+        std::cout<<"Calling Central Planner"<<std::endl;
         auto frontiers_assigned = central_planner.assignFrontierGroup(all_f_group, robot_positions, robot_map.max_frontier_group_size);
+        //decltype(central_planner.assignFrontierGroup(all_f_group, robot_positions, robot_map.max_frontier_group_size)) frontiers_assigned;
+        //frontiers_assigned[0] = 0;
+        std::cout<<"Length of Frontiers"<<all_f_group.size()<<std::endl;
+        std::cout<<"Assigning Frontier Groups to robots"<<std::endl;
         for (int i = 0; i < robot_num; i++) {
             robot_list[i].assignFrontierGroup(all_f_group[frontiers_assigned[i]]);
         }
