@@ -443,9 +443,9 @@ public:
     void getRobotFrontierGroupDistance(std::vector<FrontierGroup>& frontier_groups, std::vector<Position>& robot_positions ) {
         
         for(int i=0 ; i< num_robots; i++) {  
-            for(int j = 0; j< 1000 ; j++ )  { // Number Groups
+            for(int j = 0; j< frontier_groups.size() ; j++ )  { // Number Groups
                 std::pair<int, int> temp_id_dist = {0,INT_MAX}; 
-                for(int k =0 ; k< 1000; k++){ // Number Frontier in Group
+                for(int k =0 ; k< frontier_groups[j].frontiers.size(); k++){ // Number Frontier in Group
                     int distance_to_robot = getRobotFrontierDistance(robot_positions[i], frontier_groups[j].frontiers[k]);
                     if(temp_id_dist.second > distance_to_robot) {
                         temp_id_dist.first = j;
@@ -460,13 +460,14 @@ public:
     }
 
     std::unordered_map<int, int> assignFrontierGroup(std::vector<FrontierGroup>& frontier_groups, std::vector<Position>& robot_positions, int max_frontier_group_size) {
-        getRobotFrontierGroupDistance(frontier_groups, robot_positions);
         std::unordered_map<int, int> robot_frontier_group;
+        getRobotFrontierGroupDistance(frontier_groups, robot_positions);
+        
         std::unordered_map<int, int> num_robots_assigned_to_frontier;
         for(int i=0 ; i< num_robots; i++) {
             double score = INT_MAX; 
             int chosen_frontier_group_id = 0;
-            for(int j = 0; j< 1000 ; j++ ) { //Frontier Groups
+            for(int j = 0; j< frontier_groups.size() ; j++ ) { //Frontier Groups
                 // alpha * COST + beta * (IMPORTANCE) + gamme * (CURIOSITY) + lamda*REPETITION [last is zero]
                 double frontier_group_score = alpha * (frontier_group_distance[i][j].second) - beta * (frontier_groups[j].group_size/max_frontier_group_size) + gamma * (num_robots_assigned_to_frontier[j]);
                 if (score > frontier_group_score) {
