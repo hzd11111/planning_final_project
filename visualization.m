@@ -27,7 +27,7 @@ timestamp = 1;
 foldername = "test_exp";
 robot_pos_file = "/robot_poses";
 map_file_name = "/map_vis_intermediate";
-figure("Name", "Hello", 'units','normalized','outerposition',[0 0 1 1]);
+figure("Name", "Multi-Robot-Exploration", 'units','normalized','outerposition',[0 0 1 1]);
 while 1
     if(displayPath(foldername+robot_pos_file+int2str(timestamp),foldername+map_file_name+int2str(timestamp)))
         timestamp = timestamp + 10;

@@ -71,7 +71,7 @@ int main(int argc, char* argv[]) {
         robot_list.emplace_back(std::to_string(i), starting_postions.at(i));
         robot_map.updateExploration(starting_postions.at(i));
     }
-    CentralPlanner central_planner(1,5,10, robot_num);
+    CentralPlanner central_planner(1,7,20, robot_num);
 
     // initial map vis
     std::ofstream output_file;
@@ -113,10 +113,17 @@ int main(int argc, char* argv[]) {
         if (FLOW_DEBUG) std::cout<<"Make plans for all robots"<<std::endl;
         vector<bool> path_executed(robot_num, false);
         bool all_robots_reached = false;
+        bool robot_idle = false;
+        bool last_robot_idle = false;
+        int idle_time = 0;
+        // std::atomic<bool> robot_idle; 
         while(!all_robots_reached) {
             all_robots_reached = true;
+            robot_idle = false;
             for (int i = 0; i < robot_num; i++) {
-                path_executed[i] = robot_list[i].executePlan(robot_map, all_f_group[frontiers_assigned[i]]);
+                bool isidle = false;
+                path_executed[i] = robot_list[i].executePlan(robot_map, all_f_group[frontiers_assigned[i]], isidle);
+                robot_idle |= isidle;
                 if (FLOW_DEBUG) std::cout<<"Path Executed"<<std::endl;
                 all_robots_reached &= path_executed[i];
             }
@@ -129,6 +136,17 @@ int main(int argc, char* argv[]) {
                 output_file_intermediate << robot_map.convertToString(); 
                 output_file_intermediate.close();
             }
+            if(robot_idle && robot_idle != last_robot_idle) {
+                idle_time = robot_map.timestep;
+            }
+            else if(robot_idle &&  robot_map.timestep - idle_time > 7) {
+                break;
+            }
+            else {
+                /*Do Nothing*/
+            }
+
+            last_robot_idle = robot_idle;
         }
 
 

@@ -252,7 +252,7 @@ class Robot {
             return traj_history.back();
         }
 
-        bool executePlan(RobotMap<LidarSensor<LIDAR_RANGE>>& robot_map, FrontierGroup& assigned_frontier_group) { 
+        bool executePlan(RobotMap<LidarSensor<LIDAR_RANGE>>& robot_map, FrontierGroup& assigned_frontier_group, bool& robot_idle) { 
             // take planned traj and keep updating traj_history till goal is found
             // return false if no frontier is reached
             
@@ -260,6 +260,7 @@ class Robot {
             // check if planned_traj has steps remaining, otherwise replan if frontiers remaining
             if (planned_traj.size() == 0 && assigned_frontier_group.frontiers.size() == 0) {
                 traj_history.push_back(traj_history.back());
+                robot_idle = true;
                 return true; // no steps left to execute
             }
             else if (planned_traj.size() == 0 && assigned_frontier_group.frontiers.size() > 0) {
