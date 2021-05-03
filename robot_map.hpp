@@ -65,6 +65,7 @@ public:
     const double ANGLE_DISC = 1.0/Range;
     inline bool updateMap(std::vector<std::vector< MapElement> >& robot_map,
                    const Position& pos) const {
+
         int row = pos.getRow(), col = pos.getCol();
 
         // if obstacle
@@ -82,15 +83,17 @@ public:
         double current_ray_angle = 0.0;
         while (current_ray_angle <= 2 *M_PI) {
             for (double range = 0.0; range <= Range; range += 0.5) {
+                
                 int delta_row = range * cos(current_ray_angle);
                 int delta_col = range * sin(current_ray_angle);
                 int global_row = row + delta_row;
                 int global_col = col + delta_col;
+                if (global_row < 0 || global_row >= robot_map.size()) break;
+                if (global_col < 0 || global_col >= robot_map[0].size()) break;
                 if (!robot_map[global_row][global_col].explored) {
                     robot_map[global_row][global_col].explored = true;
                     map_changed = true;
                 }
-
                 if (robot_map[global_row][global_col].obstacle) break;
             }
             current_ray_angle += ANGLE_DISC;
@@ -204,6 +207,7 @@ public:
 
     RobotMap(std::string filename) {
         readFromFile(filename);
+        robot_occupancy_map.resize(current_map.size(), std::vector<std::set<int>> (current_map[0].size()));
     }
 
     //Sachit: Can just be replaced by number of explored 
@@ -289,7 +293,9 @@ public:
         if(!isExplored(pos)) return false;
         if(isObstacle(pos)) return false;
         std::vector<Position> all_neighbours = getNeighbours(pos);
+        //std::cout<<"Position: "<<pos.toString()<<std::endl;
         for (const auto& neighbour : all_neighbours) {
+            //std::cout<<"Neighbour: "<<neighbour.toString()<<" Is Explored: "<<isExplored(neighbour)<<std::endl;
             if (!isExplored(neighbour)) {
                 return true;
             }
@@ -434,14 +440,13 @@ public:
         this->gamma = gamma;
     }
     /* Distance of robot to each FG (based on closest Frontier) */
-    std::unordered_map<int, std::vector<std::pair<int, int>>> frontier_group_distance;
 
     int getRobotFrontierDistance(Position robot_loc, Position frontier_loc) {
         return std::max( std::abs(robot_loc.x - frontier_loc.x), std::abs(robot_loc.y - frontier_loc.y)  ); 
     }
 
-    void getRobotFrontierGroupDistance(std::vector<FrontierGroup>& frontier_groups, std::vector<Position>& robot_positions ) {
-        
+    auto getRobotFrontierGroupDistance(std::vector<FrontierGroup>& frontier_groups, std::vector<Position>& robot_positions ) {
+        std::unordered_map<int, std::vector<std::pair<int, int>>> frontier_group_distance;
         for(int i=0 ; i< num_robots; i++) {  
             for(int j = 0; j< frontier_groups.size() ; j++ )  { // Number Groups
                 std::pair<int, int> temp_id_dist = {0,INT_MAX}; 
@@ -457,12 +462,21 @@ public:
             
         }
 
+        return frontier_group_distance;
+
     }
 
     std::unordered_map<int, int> assignFrontierGroup(std::vector<FrontierGroup>& frontier_groups, std::vector<Position>& robot_positions, int max_frontier_group_size) {
         std::unordered_map<int, int> robot_frontier_group;
-        getRobotFrontierGroupDistance(frontier_groups, robot_positions);
-        
+        auto frontier_group_distance = getRobotFrontierGroupDistance(frontier_groups, robot_positions);
+
+        if(frontier_groups.size() <= 1) {
+            for(int i=0 ; i< num_robots; i++) {
+                robot_frontier_group[i] = 0;
+            }
+            return robot_frontier_group;
+        }
+
         std::unordered_map<int, int> num_robots_assigned_to_frontier;
         for(int i=0 ; i< num_robots; i++) {
             double score = INT_MAX; 

@@ -7,11 +7,22 @@
 #include <vector>
 
 using namespace std;
+
+void writeRobotPoses(string filename, vector<Robot> rob) {
+    std::ofstream output_file_intermediate;
+    output_file_intermediate.open(filename);
+    for (const Robot& r:rob) {
+        output_file_intermediate << r.get_position().toString() << "\n";
+    }
+    output_file_intermediate.close();
+}
+
 int main(int argc, char* argv[]) {
     // load arguments
     int robot_num = 1;
     string map_file = "map3.txt";
     string start_position_file_path = "pos3.txt";
+    string run_name = "default_run";
 
     if (argc > 1) {
         robot_num = atoi(argv[1]); 
@@ -23,6 +34,10 @@ int main(int argc, char* argv[]) {
 
     if (argc > 3) {
         start_position_file_path = std::string(argv[3]);
+    }
+
+    if (argc > 4) {
+        run_name = std::string(argv[4]);
     }
 
     // initialize system
@@ -67,14 +82,14 @@ int main(int argc, char* argv[]) {
 
     // main loop
     std::cout<<"Starting Main Loop"<<std::endl;
-    bool map_explored = false;
     int loop_counter = 0;
-    while(!map_explored) {
+    while(true) {
         loop_counter++;
         std::cout<<"Loop Number "<<loop_counter<<std::endl;
         // detect all frontier groups
         std::cout<<"Detect all frontier groups"<<std::endl;
         vector<FrontierGroup> all_f_group = robot_map.getAllFrontierGroups();
+        if (all_f_group.empty()) break;
 
         // assign the frontiers to the robots
         std::cout<<"Assign the frontiers to the robots"<<std::endl;
@@ -100,9 +115,18 @@ int main(int argc, char* argv[]) {
             all_robots_reached = true;
             for (int i = 0; i < robot_num; i++) {
                 path_executed[i] = robot_list[i].executePlan(robot_map, all_f_group[frontiers_assigned[i]]);
+                std::cout<<"Path Executed"<<std::endl;
                 all_robots_reached &= path_executed[i];
             }
+            robot_map.timestep++;
+            writeRobotPoses("robot_poses"+std::to_string(robot_map.timestep), robot_list);
+            std::ofstream output_file_intermediate;
+            output_file_intermediate.open("map_vis_intermediate"+std::to_string(robot_map.timestep));
+            output_file_intermediate << robot_map.convertToString(); 
+            output_file_intermediate.close();
         }
+
+
     }
 
 
