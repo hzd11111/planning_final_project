@@ -13,7 +13,7 @@
 #include "robot_map.hpp"
 
 #define LIDAR_RANGE 20
-
+#define PLANNER_DEBUG false
 using namespace std;
 
 // template<typename Sensor>
@@ -154,7 +154,7 @@ class Robot {
                 
                 // check if curr_node is a frontier, if so exit. 
                 if (frontiers_map.find(curr_node.pos) != frontiers_map.end()) {
-                    std::cout<<"Found Goal"<<std::endl;
+                    if (PLANNER_DEBUG) std::cout<<"Found Goal"<<std::endl;
                     goal_found = true; goal_node = curr_node; 
                     // auto &frontiers = assigned_frontier_group.frontiers;
                     // pop the frontier from the list of frontiers
@@ -210,7 +210,7 @@ class Robot {
                     }
                 }
             }
-            std::cout<<"Exited"<<std::endl;
+            if (PLANNER_DEBUG) std::cout<<"Exited"<<std::endl;
 
             // backtrack
             if (goal_found) {
@@ -240,7 +240,7 @@ class Robot {
 
             // back tracked path
             /*for(const auto& pos : planned_traj) {
-                std::cout<<pos.toString()<<std::endl;
+                if (PLANNER_DEBUG) std::cout<<pos.toString()<<std::endl;
             }*/
         }
 

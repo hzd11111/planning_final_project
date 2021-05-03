@@ -4,3 +4,7 @@
 .vscode/settings.json
 
 robot_map_test.o
+
+test/
+
+test_exp/

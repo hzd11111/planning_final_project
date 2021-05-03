@@ -8,6 +8,8 @@
 
 using namespace std;
 
+#define FLOW_DEBUG false
+
 void writeRobotPoses(string filename, vector<Robot> rob) {
     std::ofstream output_file_intermediate;
     output_file_intermediate.open(filename);
@@ -69,57 +71,58 @@ int main(int argc, char* argv[]) {
         robot_list.emplace_back(std::to_string(i), starting_postions.at(i));
         robot_map.updateExploration(starting_postions.at(i));
     }
-    CentralPlanner central_planner(1,10,10, robot_num);
+    CentralPlanner central_planner(1,5,10, robot_num);
 
     // initial map vis
     std::ofstream output_file;
     output_file.open("map_vis.txt");
-    std::cout<<"Writing to File "<<"map_vis.txt"<<std::endl;
+    if (FLOW_DEBUG) std::cout<<"Writing to File "<<"map_vis.txt"<<std::endl;
     output_file << robot_map.convertToString(); 
-    std::cout<<"File Writen"<<std::endl;
+    if (FLOW_DEBUG) std::cout<<"File Writen"<<std::endl;
     output_file.close();
 
 
     // main loop
-    std::cout<<"Starting Main Loop"<<std::endl;
+    if (FLOW_DEBUG) std::cout<<"Starting Main Loop"<<std::endl;
     int loop_counter = 0;
     while(true) {
         loop_counter++;
         std::cout<<"Loop Number "<<loop_counter<<std::endl;
         // detect all frontier groups
-        std::cout<<"Detect all frontier groups"<<std::endl;
+        if (FLOW_DEBUG) std::cout<<"Detect all frontier groups"<<std::endl;
         vector<FrontierGroup> all_f_group = robot_map.getAllFrontierGroups();
         if (all_f_group.empty()) break;
 
         // assign the frontiers to the robots
-        std::cout<<"Assign the frontiers to the robots: "<<all_f_group.size()<<std::endl;
+        if (FLOW_DEBUG)  std::cout<<"Assign the frontiers to the robots: "<<all_f_group.size()<<std::endl;
         vector<Position> robot_positions;
         for (const auto& robot : robot_list) {
             robot_positions.push_back(robot.get_position());
         }
-        std::cout<<"Calling Central Planner"<<std::endl;
+        if (FLOW_DEBUG)  std::cout<<"Calling Central Planner"<<std::endl;
         auto frontiers_assigned = central_planner.assignFrontierGroup(all_f_group, robot_positions, robot_map.max_frontier_group_size);
         //decltype(central_planner.assignFrontierGroup(all_f_group, robot_positions, robot_map.max_frontier_group_size)) frontiers_assigned;
         //frontiers_assigned[0] = 0;
-        std::cout<<"Length of Frontiers"<<all_f_group.size()<<std::endl;
-        std::cout<<"Assigning Frontier Groups to robots"<<std::endl;
+        // std::cout<<"Length of Frontiers"<<all_f_group.size()<<std::endl;
+        if (FLOW_DEBUG) std::cout<<"Assigning Frontier Groups to robots"<<std::endl;
         for (int i = 0; i < robot_num; i++) {
             robot_list[i].assignFrontierGroup(all_f_group[frontiers_assigned[i]]);
         }
 
         // make plans for all robots
-        std::cout<<"Make plans for all robots"<<std::endl;
+        if (FLOW_DEBUG) std::cout<<"Make plans for all robots"<<std::endl;
         vector<bool> path_executed(robot_num, false);
         bool all_robots_reached = false;
         while(!all_robots_reached) {
             all_robots_reached = true;
             for (int i = 0; i < robot_num; i++) {
                 path_executed[i] = robot_list[i].executePlan(robot_map, all_f_group[frontiers_assigned[i]]);
-                std::cout<<"Path Executed"<<std::endl;
+                if (FLOW_DEBUG) std::cout<<"Path Executed"<<std::endl;
                 all_robots_reached &= path_executed[i];
             }
             robot_map.timestep++;
             if (robot_map.timestep % 10 == 1) {
+                // std::cout<<"\nNAME" <<run_name+"/robot_poses"+std::to_string(robot_map.timestep);
                 writeRobotPoses(run_name+"/robot_poses"+std::to_string(robot_map.timestep), robot_list);
                 std::ofstream output_file_intermediate;
                 output_file_intermediate.open(run_name+"/map_vis_intermediate"+std::to_string(robot_map.timestep));

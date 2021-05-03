@@ -29,7 +29,7 @@ struct Position {
         return x;
     }
 
-    int getPositionIndex() {
+    int getPositionIndex() const {
         return (y)*10000 + (x);
     }
 
@@ -156,6 +156,7 @@ struct FrontierGroup {
             mapPositiontoIndex();
         }
 
+        // n^2 complexity
         for(int i=0; i< INFLATION_RADIUS; i++ ) {
             for(int j=0; i< INFLATION_RADIUS; i++ ) {
                 int id = (pos.x + i)*10000 + (pos.y + j);
@@ -166,6 +167,31 @@ struct FrontierGroup {
             }
         }
 
+        // // Do this to be faster if array is smaller (better than n^2 complexity)
+        // int id = position_to_id[pos.getPositionIndex()];
+        // if(INFLATION_RADIUS*INFLATION_RADIUS < frontier_weights.size()) {
+        //     for(int i=0; i< frontiers.size(); i++ ) {
+        //          if((std::abs(frontiers[i].x - frontiers[id].x ) < INFLATION_RADIUS) && 
+        //             (std::abs(frontiers[i].y - frontiers[id].y ) < INFLATION_RADIUS) ) {
+        //                 frontier_weights[id] += INFLATION_RADIUS - std::max(std::abs(frontiers[i].x - frontiers[id].x ), std::abs(frontiers[i].y - frontiers[id].y ));
+        //             }
+        //     }
+                
+        // }
+
+    }
+
+    void fillScores() {
+        for(int i=0; i< frontiers.size(); i++ ) {
+            for(int j=i+1; j< frontiers.size(); j++ ) {
+                if((std::abs(frontiers[i].x - frontiers[j].x ) < INFLATION_RADIUS) && 
+                    (std::abs(frontiers[i].y - frontiers[j].y ) < INFLATION_RADIUS) ) {
+                        frontier_weights[i]++;
+                        frontier_weights[j]++;
+                    }
+            }
+            frontier_weights[i] = std::max(2*INFLATION_RADIUS - frontier_weights[i], 1);
+        }
     }
 
 };
@@ -203,7 +229,7 @@ public:
     int max_frontier_group_size = 0;
     std::vector<Position> robot_poses;
     std::vector<std::vector<std::set<int>>> robot_occupancy_map;
-    int timestep;
+    int timestep = 0;
 
     RobotMap(std::string filename) {
         readFromFile(filename);
@@ -353,9 +379,9 @@ public:
         int score = 0;
         for (const auto& n : neighbours) {
             auto new_frontiers = findAllConnectingFrontiers(frontiers_to_exclude, n);
-            if(!isFrontier(n.getRow(), n.getCol()) ) {
-                score++;
-            }
+            // if(isObstacle(n)) {
+            //     score--; //Can be further reduced to make robots stay away from obstacles TOFO:Tune this
+            // }
             frontiers.first.insert(frontiers.first.end(), new_frontiers.first.begin(), new_frontiers.first.end());
             frontiers.second.insert(frontiers.second.end(), new_frontiers.second.begin(), new_frontiers.second.end());
         }
@@ -382,28 +408,12 @@ public:
             // make frontier group
             FrontierGroup new_group;
             int index = 0;
-            for (int i=0; i<list_of_frontiers.second.size()-1; i++) {
-                    if(list_of_frontiers.second[0] == 1 && i < 2) {
-                        if(i != 0 && i <list_of_frontiers.second.size()-2 ) {
-                            list_of_frontiers.second[i]++;        
-                        }
-                        continue;
-                    }
-                    
-                    if(list_of_frontiers.second[i] == 1) {
-                        continue;
-                    }
-                    else if(i+1<list_of_frontiers.second.size() &&list_of_frontiers.second[i+1] == 1) {
-                        list_of_frontiers.second[i]++; 
-                        continue;
-                    }
-
-                    list_of_frontiers.second[i]++;
-
-            }
             for (const auto& frontier : list_of_frontiers.first) {
-                new_group.addFrontier(frontier, std::max(4 - list_of_frontiers.second[index++] + 1, 1));
+                new_group.addFrontier(frontier, list_of_frontiers.second[index++]);
             }
+            // new_group.mapPositiontoIndex();
+            // new_group.fillScores(); Done Later When Chosen
+
             max_frontier_group_size = std::max(max_frontier_group_size, new_group.group_size );
             result.push_back(std::move(new_group));
 
@@ -445,7 +455,7 @@ public:
         return std::max( std::abs(robot_loc.x - frontier_loc.x), std::abs(robot_loc.y - frontier_loc.y)  ); 
     }
 
-    auto getRobotFrontierGroupDistance(std::vector<FrontierGroup>& frontier_groups, std::vector<Position>& robot_positions ) {
+    std::unordered_map<int, std::vector<std::pair<int, int>>> getRobotFrontierGroupDistance(std::vector<FrontierGroup>& frontier_groups, std::vector<Position>& robot_positions ) {
         std::unordered_map<int, std::vector<std::pair<int, int>>> frontier_group_distance;
         for(int i=0 ; i< num_robots; i++) {  
             for(int j = 0; j< frontier_groups.size() ; j++ )  { // Number Groups
@@ -482,13 +492,20 @@ public:
             double score = INT_MAX; 
             int chosen_frontier_group_id = 0;
             for(int j = 0; j< frontier_groups.size() ; j++ ) { //Frontier Groups
+            // std::cout<<"\nRobot :"<<i<<" Frontier :"<<j<<", Closest :"<<frontier_group_distance[i][j].second<<" P: "<< frontier_groups[j].frontiers[frontier_group_distance[i][j].first].toString();
                 // alpha * COST + beta * (IMPORTANCE) + gamme * (CURIOSITY) + lamda*REPETITION [last is zero]
                 double frontier_group_score = alpha * (frontier_group_distance[i][j].second) - beta * (frontier_groups[j].group_size/max_frontier_group_size) + gamma * (num_robots_assigned_to_frontier[j]);
                 if (score > frontier_group_score) {
+                    score = frontier_group_score;
                     chosen_frontier_group_id = j;
                 }
             }
+            // std::cout<<"\nChosen: "<< chosen_frontier_group_id<<std::endl;
             robot_frontier_group[i] = chosen_frontier_group_id;
+            if(!num_robots_assigned_to_frontier[chosen_frontier_group_id]) {
+                frontier_groups[chosen_frontier_group_id].mapPositiontoIndex();
+                frontier_groups[chosen_frontier_group_id].fillScores();
+            }
             num_robots_assigned_to_frontier[chosen_frontier_group_id]++;
 
         }
