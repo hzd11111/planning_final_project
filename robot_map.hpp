@@ -1,3 +1,4 @@
+#pragma once
 #include <vector>
 #include <string>
 #include <climits>
@@ -6,6 +7,7 @@
 #include <sstream>
 #include <fstream>
 #include <math.h>
+#include <set>
 #include <optional>
 #include <unordered_map>
 #include <unordered_set>
@@ -35,7 +37,7 @@ struct Position {
         return std::to_string(x) + "," + std::to_string(y);
     }
     
-    bool operator==(const Position& other)
+    bool operator==(const Position& other) const
     {
         return (other.x == this->x) && (other.y == this->y);
     }
@@ -139,7 +141,8 @@ struct FrontierGroup {
     }
 
     void mapPositiontoIndex() {
-
+        
+        position_to_id.clear();
         for(int i=0; i<frontiers.size(); i++ ) {
             position_to_id[frontiers[i].getPositionIndex()] = i;
         }
@@ -196,12 +199,14 @@ public:
     Sensor sensor;
     int max_frontier_group_size = 0;
     std::vector<Position> robot_poses;
+    std::vector<std::vector<std::set<int>>> robot_occupancy_map;
+    int timestep;
 
     RobotMap(std::string filename) {
         readFromFile(filename);
     }
 
-    //Sachit: Can just be replaced by number of unexplored 
+    //Sachit: Can just be replaced by number of explored 
     std::string convertToString() const {
         std::string result = "";
         bool first_row = true;
@@ -420,8 +425,13 @@ public:
     //per robot Heuristic
     // std::vector<weight_map> g_map;
     
-    CentralPlanner(double alpha_, double beta_, double gamma_) : alpha(alpha_), beta(beta_), gamma(gamma_) {
 
+    // 1, 10, 10
+    CentralPlanner(double alpha, double beta, double gamma, int num_robot):
+        num_robots(num_robot) {
+        this->alpha = alpha;
+        this->beta = beta;
+        this->gamma = gamma;
     }
     /* Distance of robot to each FG (based on closest Frontier) */
     std::unordered_map<int, std::vector<std::pair<int, int>>> frontier_group_distance;
@@ -467,6 +477,7 @@ public:
             num_robots_assigned_to_frontier[chosen_frontier_group_id]++;
 
         }
+
         return robot_frontier_group;
     }    
 };

@@ -1,3 +1,4 @@
+#pragma once
 #include <vector>
 #include <set>
 #include <string>
@@ -8,6 +9,7 @@
 #include <math.h>
 #include <queue>
 #include <unordered_map>
+#include<algorithm>
 #include "robot_map.hpp"
 
 #define LIDAR_RANGE 5
@@ -15,28 +17,28 @@
 using namespace std;
 
 // template<typename Sensor>
-struct PlannerMap {
+// struct PlannerMap {
 
-    vector<vector<set<int>>> robot_occupancy_map; //keys are timestamps
-    RobotMap<LidarSensor<LIDAR_RANGE>>& robot_map;
-    int timestamp;
+//     vector<vector<set<int>>> robot_occupancy_map; //keys are timestamps
+//     RobotMap<LidarSensor<LIDAR_RANGE>>& robot_map;
+//     int timestamp;
 
-    PlannerMap(RobotMap<LidarSensor<LIDAR_RANGE>>& robot_map_inc): robot_map(robot_map_inc) {
-        // this->robot_map = robot_map;
-        // initialize occupancy map
-        size_t num_rows = robot_map.current_map.size();
-        size_t num_cols = robot_map.current_map[0].size();
+//     PlannerMap(RobotMap<LidarSensor<LIDAR_RANGE>>& robot_map_inc): robot_map(robot_map_inc) {
+//         // this->robot_map = robot_map;
+//         // initialize occupancy map
+//         size_t num_rows = robot_map.current_map.size();
+//         size_t num_cols = robot_map.current_map[0].size();
 
-        this->robot_occupancy_map.resize(num_rows, vector<set<int>>(num_cols));
-        // TODO: where do we initialize the intial robot state
-        this->timestamp = 0;
-    }
+//         this->robot_occupancy_map.resize(num_rows, vector<set<int>>(num_cols));
+//         // TODO: where do we initialize the intial robot state
+//         this->timestamp = 0;
+//     }
 
-    int size(){
-        return robot_map.current_map.size() * robot_map.current_map[0].size();
-    }
+//     int size(){
+//         return robot_map.current_map.size() * robot_map.current_map[0].size();
+//     }
 
-};
+// };
 
 struct Node {
     int index;
@@ -79,9 +81,10 @@ class Robot {
     private:
         vector<Position> traj_history;
         deque<Position> planned_traj; 
+        bool reached_any_frontier = false;
 
-        FrontierGroup assigned_frontier_group;
-        unordered_map<Position, Position, PositionHash> frontiers_map;
+        // FrontierGroup& assigned_frontier_group;
+        unordered_set<Position, PositionHash> frontiers_map;
         unordered_map<Position, int, PositionHash> frontiers_weights_map; 
 
         double calcDistance(Position a, Position b) {
@@ -91,30 +94,32 @@ class Robot {
     public:
         string id;
 
-        Robot(string id, Position start_position) {
+        Robot(string id, const Position& start_position) {
             this->id = id;
             this->traj_history.push_back(start_position);
         }
 
-        void assignFrontierGroup(FrontierGroup frontier_group) {
+        void assignFrontierGroup(FrontierGroup& assigned_frontier_group) {
             // this->assigned_frontier_groups.push_back(frontier_group);
-            this->assigned_frontier_group = frontier_group;
-            
+            // this->assigned_frontier_group = frontier_group;
+            planned_traj.clear(); frontiers_map.clear(); frontiers_weights_map.clear();
+            reached_any_frontier = false;
+
             int index = 0;
             for (Position frontier : assigned_frontier_group.frontiers) {
-                frontiers_map.insert({frontier,frontier});
-                frontiers_weights_map.insert({frontier, frontier_group.frontier_weights[index]});
+                frontiers_map.insert(frontier);
+                frontiers_weights_map[frontier] = assigned_frontier_group.frontier_weights[index];
                 index++;
             }
         }
        
-        bool isTraversable(const Position& pos, const PlannerMap& planner_map) {
+        bool isTraversable(const Position& pos, const RobotMap<LidarSensor<LIDAR_RANGE>>& robot_map) {
             // traversable positions are explored, obstacle free and in the map range
-            RobotMap<LidarSensor<LIDAR_RANGE>>& robot_map = planner_map.robot_map;
-            return robot_map.isExplored(pos) && !(robot_map.isObstacle(pos)) && robot_map.inMapRange(pos);
+            // RobotMap<LidarSensor<LIDAR_RANGE>>& robot_map = planner_map.robot_map;
+            return robot_map.inMapRange(pos) && robot_map.isExplored(pos) && !(robot_map.isObstacle(pos));
         }
 
-        void planToClosestFrontier(PlannerMap& planner_map) {
+        void planToClosestFrontier(RobotMap<LidarSensor<LIDAR_RANGE>>& robot_map, FrontierGroup& assigned_frontier_group) {
 
             // reset planned traj                
             this->planned_traj = deque<Position>();  //Alvin check
@@ -140,8 +145,21 @@ class Robot {
                 auto curr_node = open_list.top();
                 open_list.pop();
                 
-                // check for goal
-                if (frontiers_map.find(curr_node.pos) != frontiers_map.end()) {goal_found = true; goal_node = curr_node; break;}
+                // check if curr_node is a frontier, if so exit. 
+                if (frontiers_map.find(curr_node.pos) != frontiers_map.end()) {
+                    goal_found = true; goal_node = curr_node; 
+                    // auto &frontiers = assigned_frontier_group.frontiers;
+                    // pop the frontier from the list of frontiers
+                    // assigned_frontier_group.frontier_weights.erase(std::find(assigned_frontier_group.frontiers.begin(), assigned_frontier_group.frontiers.end(), curr_node.pos));
+                    
+                    // TODO: Delete weights from the 
+                    // assigned_frontier_group.frontiers.erase(std::find(assigned_frontier_group.frontiers.begin(), assigned_frontier_group.frontiers.end(), curr_node.pos));
+                    assigned_frontier_group.frontiers.erase(assigned_frontier_group.frontiers.begin() + assigned_frontier_group.position_to_id[curr_node.pos.getPositionIndex()]);
+                    assigned_frontier_group.frontier_weights.erase(assigned_frontier_group.frontier_weights.begin() + assigned_frontier_group.position_to_id[curr_node.pos.getPositionIndex()]);
+                    assigned_frontier_group.mapPositiontoIndex();
+                    frontiers_map.erase(curr_node.pos);
+                    break;
+                }
 
                 // check if node is already visited
                 bool node_not_yet_expanded = (visited.find(curr_node) == visited.end());
@@ -151,14 +169,14 @@ class Robot {
                     visited.insert({curr_node, curr_node});
 
                     // get all the neighbors
-                    vector<Position> neighbours_positions = planner_map.robot_map.getNeighbours(curr_node.pos);
+                    vector<Position> neighbours_positions = robot_map.getNeighbours(curr_node.pos);
 
                     // loop over all the neighbors
                     while(!neighbours_positions.empty())
                     {
                         Position neighbour_pos = neighbours_positions.back();
                         // skip node if it isn't traversable 
-                        if (!isTraversable(neighbour_pos, planner_map)) {
+                        if (!isTraversable(neighbour_pos, robot_map)) {
                             neighbours_positions.pop_back(); 
                             continue; 
                         }
@@ -167,6 +185,10 @@ class Robot {
                         Node neighbour = Node(0, neighbour_pos, g_value, curr_node.pos);
                         if (frontiers_map.find(neighbour_pos) != frontiers_map.end()) {
                             neighbour.h = frontiers_weights_map[neighbour_pos];
+                        }
+                        else 
+                        {
+                            neighbour.h = 0;
                         }
                         neighbours_positions.pop_back();
                         bool node_not_yet_expanded = (visited.find(neighbour) == visited.end());
@@ -184,6 +206,7 @@ class Robot {
             if (goal_found) {
                 // reset the planned trajectory
                 planned_traj = deque<Position>();
+                assigned_frontier_group.inflateCost(goal_node.pos); 
 
                 auto curr_node = goal_node;
                 // backtrack till the start node, dont push start node to planned traj
@@ -191,6 +214,14 @@ class Robot {
                     planned_traj.push_front(curr_node.pos);     
                     // auto parent_iterator = visited.find(Node(-1, curr_node.parent_pos, -1.0, curr_node.parent_pos));
                     curr_node = visited.at(Node(-1, curr_node.parent_pos, -1.0, curr_node.parent_pos));
+                }
+                
+                // update the frontiers map
+                frontiers_weights_map.clear();
+                int index = 0;
+                for (Position frontier : assigned_frontier_group.frontiers) {
+                    frontiers_weights_map.insert({frontier, assigned_frontier_group.frontier_weights[index]});
+                    index++;
                 }
             }
             else {
@@ -207,18 +238,32 @@ class Robot {
             return traj_history.back();
         }
 
-        bool executePlan(RobotMap<LidarSensor<LIDAR_RANGE>>& robot_map) { 
+        bool executePlan(RobotMap<LidarSensor<LIDAR_RANGE>>& robot_map, FrontierGroup& assigned_frontier_group) { 
             // take planned traj and keep updating traj_history till goal is found
-            // return false if goal is already reached
-            if (planned_traj.size() > 0) {
-                traj_history.push_back(planned_traj[0]);
-                robot_map.updateExploration(planned_traj[0]);
-                planned_traj.pop_front();
-                return true;
+            // return false if no frontier is reached
+            
+            // check if planned_traj has steps remaining, otherwise replan if frontiers remaining
+            if (planned_traj.size() == 0 && assigned_frontier_group.frontiers.size() == 0) {
+                return true; // no steps left to execute
             }
-            else {
-                return false;
+            else if (planned_traj.size() == 0 && assigned_frontier_group.frontiers.size() > 0) {
+                planToClosestFrontier(robot_map, assigned_frontier_group);
             }
+            
+            // check if the step is collision free, otherwise skip moving for this timestep
+            set<int> &occupancy_set = robot_map.robot_occupancy_map[planned_traj[0].x][planned_traj[0].y];
+            bool position_occupied = occupancy_set.find(robot_map.timestep + 1) != occupancy_set.end();
+            if (position_occupied) {return reached_any_frontier;}
+
+
+            // once planned traj has steps to execute and the position is obstacle free
+            traj_history.push_back(planned_traj[0]);
+            robot_map.updateExploration(planned_traj[0]);
+            occupancy_set.insert(robot_map.timestep + 1);
+            planned_traj.pop_front();
+            if (planned_traj.size() == 0) {reached_any_frontier = true;}
+            
+            return reached_any_frontier;
         } 
 
 };
