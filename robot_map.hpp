@@ -11,8 +11,18 @@
 #include <optional>
 #include <unordered_map>
 #include <unordered_set>
+#include<algorithm>
+#include<random>
 #define GETMAPINDEX(X, Y, XSIZE, YSIZE) ((Y-1)*XSIZE + (X-1))
 #define INFLATION_RADIUS 3
+
+enum{
+    PRIOTIZED_PLANNING_FIXED = 0,
+    PRIOTIZED_PLANNING_RANDOM,
+    PRIOTIZED_PLANNING_CLOSEST,
+};
+#define PRIOTIZED_PLANNING 0
+
 struct Position {
     int x, y;
     Position(int x_, int y_) :
@@ -455,7 +465,7 @@ public:
         return std::max( std::abs(robot_loc.x - frontier_loc.x), std::abs(robot_loc.y - frontier_loc.y)  ); 
     }
 
-    std::unordered_map<int, std::vector<std::pair<int, int>>> getRobotFrontierGroupDistance(std::vector<FrontierGroup>& frontier_groups, std::vector<Position>& robot_positions ) {
+    std::unordered_map<int, std::vector<std::pair<int, int>>> getRobotFrontierGroupDistance(std::vector<FrontierGroup>& frontier_groups, std::vector<Position>& robot_positions, std::vector<std::pair<int,int>>& closest_to_robot ) {
         std::unordered_map<int, std::vector<std::pair<int, int>>> frontier_group_distance;
         for(int i=0 ; i< num_robots; i++) {  
             for(int j = 0; j< frontier_groups.size() ; j++ )  { // Number Groups
@@ -467,7 +477,13 @@ public:
                         temp_id_dist.second = distance_to_robot;
                     }
                 }
-                frontier_group_distance[i].push_back(temp_id_dist);      
+                frontier_group_distance[i].push_back(temp_id_dist); 
+                if(closest_to_robot.size() >  i) {
+                    closest_to_robot[i].first = std::min(closest_to_robot[i].first, temp_id_dist.second);
+                }  
+                else {
+                    closest_to_robot.push_back({temp_id_dist.second, i});
+                }   
             }
             
         }
@@ -478,30 +494,58 @@ public:
 
     std::unordered_map<int, int> assignFrontierGroup(std::vector<FrontierGroup>& frontier_groups, std::vector<Position>& robot_positions, int max_frontier_group_size) {
         std::unordered_map<int, int> robot_frontier_group;
-        auto frontier_group_distance = getRobotFrontierGroupDistance(frontier_groups, robot_positions);
+        
 
-        if(frontier_groups.size() <= 1) {
+        #if PRIOTIZED_PLANNING == 1
+            /*randomized starting */
+            std::vector<int> shuffled;
             for(int i=0 ; i< num_robots; i++) {
-                robot_frontier_group[i] = 0;
+                shuffled.push_back(i);
             }
-            return robot_frontier_group;
-        }
+            auto rd = std::random_device {};
+            auto rng = std::default_random_engine {rd()};
+            std::shuffle(std::begin(shuffled), std::end(shuffled), rng);
+        #endif
+
+        //{Closeness to frontier, RobotID}
+        std::vector<std::pair<int,int>> closest_to_robot; // /*prioritized starting */
+        auto frontier_group_distance = getRobotFrontierGroupDistance(frontier_groups, robot_positions, closest_to_robot);
+
+        #if PRIOTIZED_PLANNING == 2
+            /*prioritized starting */
+            std::sort(closest_to_robot.begin(), closest_to_robot.end());
+
+            if(frontier_groups.size() <= 1) {
+                for(int i=0 ; i< num_robots; i++) {
+                    robot_frontier_group[i] = 0;
+                }
+                return robot_frontier_group;
+            }
+        #endif
+
 
         std::unordered_map<int, int> num_robots_assigned_to_frontier;
         for(int i=0 ; i< num_robots; i++) {
             double score = INT_MAX; 
             int chosen_frontier_group_id = 0;
+            int rid = i;
+            #if PRIOTIZED_PLANNING == 1
+                rid = shuffled[i];
+            #elif PRIOTIZED_PLANNING == 2
+                rid = closest_to_robot[i].second;
+            #endif
+
             for(int j = 0; j< frontier_groups.size() ; j++ ) { //Frontier Groups
-            // std::cout<<"\nRobot :"<<i<<" Frontier :"<<j<<", Closest :"<<frontier_group_distance[i][j].second<<" P: "<< frontier_groups[j].frontiers[frontier_group_distance[i][j].first].toString();
+            // std::cout<<"\nRobot :"<<i<<" Frontier :"<<j<<", Closest :"<<frontier_group_distance[rid][j].second<<" P: "<< frontier_groups[j].frontiers[frontier_group_distance[rid][j].first].toString();
                 // alpha * COST + beta * (IMPORTANCE) + gamme * (CURIOSITY) + lamda*REPETITION [last is zero]
-                double frontier_group_score = alpha * (frontier_group_distance[i][j].second) - beta * (frontier_groups[j].group_size/max_frontier_group_size) + gamma * (num_robots_assigned_to_frontier[j]);
+                double frontier_group_score = alpha * (frontier_group_distance[rid][j].second) - beta * (frontier_groups[j].group_size/max_frontier_group_size) + gamma * (num_robots_assigned_to_frontier[j]);
                 if (score > frontier_group_score) {
                     score = frontier_group_score;
                     chosen_frontier_group_id = j;
                 }
             }
             // std::cout<<"\nChosen: "<< chosen_frontier_group_id<<std::endl;
-            robot_frontier_group[i] = chosen_frontier_group_id;
+            robot_frontier_group[rid] = chosen_frontier_group_id;
             if(!num_robots_assigned_to_frontier[chosen_frontier_group_id]) {
                 frontier_groups[chosen_frontier_group_id].mapPositiontoIndex();
                 frontier_groups[chosen_frontier_group_id].fillScores();
