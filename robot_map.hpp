@@ -13,6 +13,8 @@
 #include <unordered_set>
 #define GETMAPINDEX(X, Y, XSIZE, YSIZE) ((Y-1)*XSIZE + (X-1))
 #define INFLATION_RADIUS 3
+#define M_PI       3.14159265358979323846
+
 struct Position {
     int x, y;
     Position(int x_, int y_) :
