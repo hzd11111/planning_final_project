@@ -8,3 +8,9 @@ robot_map_test.o
 test/
 
 test_exp/
+
+test_*
+
+map_vis.txt
+
+robot_planning.o
