@@ -21,7 +21,8 @@ enum{
     PRIOTIZED_PLANNING_RANDOM,
     PRIOTIZED_PLANNING_CLOSEST,
 };
-#define PRIOTIZED_PLANNING 0
+#define PRIOTIZED_PLANNING 2
+#define MULTI_THREADED true
 
 struct Position {
     int x, y;
@@ -451,6 +452,7 @@ public:
     //per robot Heuristic
     // std::vector<weight_map> g_map;
     
+    std::vector<int> changed_order;
 
     // 1, 10, 10
     CentralPlanner(double alpha, double beta, double gamma, int num_robot):
@@ -492,7 +494,8 @@ public:
 
     }
 
-    std::unordered_map<int, int> assignFrontierGroup(std::vector<FrontierGroup>& frontier_groups, std::vector<Position>& robot_positions, int max_frontier_group_size) {
+    std::unordered_map<int, int> assignFrontierGroup(std::vector<FrontierGroup>& frontier_groups, std::vector<Position>& robot_positions, 
+                                                    int max_frontier_group_size, std::unordered_map<int, int>& num_robots_assigned_to_frontier) {
         std::unordered_map<int, int> robot_frontier_group;
         
 
@@ -505,6 +508,7 @@ public:
             auto rd = std::random_device {};
             auto rng = std::default_random_engine {rd()};
             std::shuffle(std::begin(shuffled), std::end(shuffled), rng);
+            changed_order = shuffled;
         #endif
 
         //{Closeness to frontier, RobotID}
@@ -514,25 +518,29 @@ public:
         #if PRIOTIZED_PLANNING == 2
             /*prioritized starting */
             std::sort(closest_to_robot.begin(), closest_to_robot.end());
-
-            if(frontier_groups.size() <= 1) {
-                for(int i=0 ; i< num_robots; i++) {
-                    robot_frontier_group[i] = 0;
-                }
-                return robot_frontier_group;
-            }
+            changed_order.clear();
         #endif
 
+        if(frontier_groups.size() <= 1) {
+            for(int i=0 ; i< num_robots; i++) {
+                robot_frontier_group[i] = 0;
+                changed_order.push_back(i);
+                num_robots_assigned_to_frontier[0]++;
+            }
+            return robot_frontier_group;
+        }
 
-        std::unordered_map<int, int> num_robots_assigned_to_frontier;
         for(int i=0 ; i< num_robots; i++) {
             double score = INT_MAX; 
             int chosen_frontier_group_id = 0;
             int rid = i;
             #if PRIOTIZED_PLANNING == 1
                 rid = shuffled[i];
+
             #elif PRIOTIZED_PLANNING == 2
                 rid = closest_to_robot[i].second;
+                changed_order.push_back(i);
+
             #endif
 
             for(int j = 0; j< frontier_groups.size() ; j++ ) { //Frontier Groups

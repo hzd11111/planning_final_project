@@ -5,6 +5,7 @@
 #include <iostream>
 #include <fstream>
 #include <vector>
+#include<thread>
 
 using namespace std;
 
@@ -100,7 +101,8 @@ int main(int argc, char* argv[]) {
             robot_positions.push_back(robot.get_position());
         }
         if (FLOW_DEBUG)  std::cout<<"Calling Central Planner"<<std::endl;
-        auto frontiers_assigned = central_planner.assignFrontierGroup(all_f_group, robot_positions, robot_map.max_frontier_group_size);
+        std::unordered_map<int, int> num_robots_assigned_to_frontier;
+        auto frontiers_assigned = central_planner.assignFrontierGroup(all_f_group, robot_positions, robot_map.max_frontier_group_size, num_robots_assigned_to_frontier);
         //decltype(central_planner.assignFrontierGroup(all_f_group, robot_positions, robot_map.max_frontier_group_size)) frontiers_assigned;
         //frontiers_assigned[0] = 0;
         // std::cout<<"Length of Frontiers"<<all_f_group.size()<<std::endl;
@@ -120,6 +122,55 @@ int main(int argc, char* argv[]) {
         while(!all_robots_reached) {
             all_robots_reached = true;
             robot_idle = false;
+
+            #if MULTI_THREADED == false
+            for (int i = 0; i < robot_num; i++) {
+                bool isidle = false;
+                #if PRIOTIZED_PLANNING == 0
+                    int rid= i;
+                #else
+                    int rid = central_planner.changed_order[i];
+                #endif
+
+                path_executed[rid] = robot_list[rid].executePlan(robot_map, all_f_group[frontiers_assigned[rid]], isidle);
+                robot_idle |= isidle;
+                if (FLOW_DEBUG) std::cout<<"Path Executed"<<std::endl;
+                all_robots_reached &= path_executed[rid];
+            }
+
+            #else 
+
+            std::vector<int> sequential;
+            std::vector<std::thread> parallel;
+
+            for (int i = 0; i < robot_num; i++) {
+                #if PRIOTIZED_PLANNING ==0
+                    int rid= i;
+                #else
+                    int rid = central_planner.changed_order[i];
+                #endif
+                if(num_robots_assigned_to_frontier[frontiers_assigned[rid]] > 0 || parallel.size()>50) {
+                    sequential.push_back(i);
+                    continue;
+                }
+                std::cout<<"\nSpawning Thread :"<<parallel.size();
+                // std::thread p(&Robot::planPath, &robot_list[rid], std::ref(robot_map), std::ref(all_f_group[frontiers_assigned[rid]]) );
+                parallel.emplace_back(std::thread(&Robot::planPath, &robot_list[rid], std::ref(robot_map), std::ref(all_f_group[frontiers_assigned[rid]]) ));
+            }
+
+            for(auto& t:parallel) {
+                t.join();
+            } 
+            for(auto s:sequential) {
+                #if PRIOTIZED_PLANNING ==0
+                    int rid= s;
+                #else
+                    int rid = central_planner.changed_order[s];
+                #endif
+                robot_list[rid].planPath(robot_map, all_f_group[frontiers_assigned[rid]]);
+
+            }
+            
             for (int i = 0; i < robot_num; i++) {
                 bool isidle = false;
                 path_executed[i] = robot_list[i].executePlan(robot_map, all_f_group[frontiers_assigned[i]], isidle);
@@ -127,6 +178,8 @@ int main(int argc, char* argv[]) {
                 if (FLOW_DEBUG) std::cout<<"Path Executed"<<std::endl;
                 all_robots_reached &= path_executed[i];
             }
+
+            #endif
             robot_map.timestep++;
             if (robot_map.timestep % 10 == 1) {
                 // std::cout<<"\nNAME" <<run_name+"/robot_poses"+std::to_string(robot_map.timestep);

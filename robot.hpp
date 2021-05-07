@@ -16,6 +16,7 @@
 #define PLANNER_DEBUG false
 using namespace std;
 
+
 // template<typename Sensor>
 // struct PlannerMap {
 
@@ -256,6 +257,14 @@ class Robot {
             // take planned traj and keep updating traj_history till goal is found
             // return false if no frontier is reached
             
+            #if MULTI_THREADED == true
+
+            if (planned_traj.size() == 0 && assigned_frontier_group.frontiers.size() == 0) {
+                traj_history.push_back(traj_history.back());
+                robot_idle = true;
+                return true; // no steps left to execute
+            }
+            #else
             //std::cout<<"Before: "<<planned_traj.size()<<std::endl;
             // check if planned_traj has steps remaining, otherwise replan if frontiers remaining
             if (planned_traj.size() == 0 && assigned_frontier_group.frontiers.size() == 0) {
@@ -268,7 +277,7 @@ class Robot {
                 planToClosestFrontier(robot_map, assigned_frontier_group);
             }
             //std::cout<<"After: "<<planned_traj.size()<<std::endl;
-            
+            #endif
             // check if the step is collision free, otherwise skip moving for this timestep
             //std::cout<<"1"<<std::endl;
             //std::cout<<planned_traj[0].toString()<<std::endl;
@@ -297,6 +306,23 @@ class Robot {
             
             return reached_any_frontier;
         } 
+
+        #if MULTI_THREADED == true
+            void planPath(RobotMap<LidarSensor<LIDAR_RANGE>>& robot_map, FrontierGroup& assigned_frontier_group) { 
+                // take planned traj and keep updating traj_history till goal is found
+                // return false if no frontier is reached
+                
+                //std::cout<<"Before: "<<planned_traj.size()<<std::endl;
+                // check if planned_traj has steps remaining, otherwise replan if frontiers remaining
+                if (planned_traj.size() == 0 && assigned_frontier_group.frontiers.size() == 0) {
+                    return;
+                }
+                else if (planned_traj.size() == 0 && assigned_frontier_group.frontiers.size() > 0) {
+                    //std::cout<<"If statement correct"<<std::endl;
+                    planToClosestFrontier(robot_map, assigned_frontier_group);
+                }
+            } 
+        #endif
 
 };
 
